@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量图片审核平台</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部工具栏 -->
+        <header class="header">
+            <div class="header-top">
+                <h1>批量图片审核平台</h1>
+                <div class="header-actions">
+                    <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                    <button class="btn btn-primary" onclick="document.getElementById('csvFileInput').click()">
+                        导入CSV
+                    </button>
+                    <button class="btn btn-success" id="exportBtn" onclick="exportResults()" disabled>
+                        导出审核结果
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 筛选区域 -->
+            <div class="filters" id="filtersContainer" style="display: none;">
+                <div class="filters-header">
+                    <span>筛选条件：</span>
+                    <button class="btn btn-small" onclick="clearFilters()">清除筛选</button>
+                </div>
+                <div class="filters-content" id="filtersContent"></div>
+            </div>
+            
+            <!-- 分页和批量操作 -->
+            <div class="toolbar" id="toolbar" style="display: none;">
+                <div class="toolbar-left">
+                    <label>每页显示：</label>
+                    <select id="pageSizeSelect" onchange="changePageSize()">
+                        <option value="10">10</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span class="info-text" id="pageInfo"></span>
+                </div>
+                <div class="toolbar-right">
+                    <button class="btn btn-success" onclick="selectAllCurrentPage()">全选本页</button>
+                    <button class="btn btn-success" onclick="approveSelected()">批量通过选中</button>
+                    <div class="pagination" id="pagination"></div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- 主内容区 -->
+        <main class="main-content" id="mainContent">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon">📁</div>
+                <h2>请导入CSV文件开始审核</h2>
+                <p>支持CSV格式，系统会自动识别图片URL列</p>
+            </div>
+            
+            <div class="images-grid" id="imagesGrid" style="display: none;"></div>
+        </main>
+    </div>
+    
+    <!-- 审核理由输入模态框 -->
+    <div class="modal" id="rejectModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>输入不通过理由</h3>
+                <button class="modal-close" onclick="closeRejectModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="rejectReasonInput" placeholder="请输入不通过的理由..." rows="4"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRejectModal()">取消</button>
+                <button class="btn btn-danger" onclick="confirmReject()">确认不通过</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
+
