@@ -7,6 +7,10 @@ let pageSize = 50;
 let filteredData = [];
 let selectedItems = new Set();
 let currentRejectIndex = null;
+let imageMetadataCache = new Map(); // 缓存图片元数据
+let filterSelections = {}; // 存储每个筛选项的选中值
+let activeDropdown = null; // 当前打开的下拉框
+let isMobileView = false; // 手机预览模式状态
 
 // CSV解析库（简化版）
 function parseCSV(text) {
@@ -88,6 +92,25 @@ function detectImageUrlColumn(headers, data) {
     return null;
 }
 
+
+// 统计字段值分布
+function getFieldStatistics(fieldName) {
+    const stats = {};
+    
+    // 文本字段直接统计
+    csvData.forEach(row => {
+        const value = row[fieldName] || '(空)';
+        stats[value] = (stats[value] || 0) + 1;
+    });
+    
+    // 转换为数组并排序
+    const result = Object.entries(stats)
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count);
+    
+    return result;
+}
+
 // 导入CSV文件
 document.getElementById('csvFileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -132,6 +155,7 @@ document.getElementById('csvFileInput').addEventListener('change', function(e) {
         document.getElementById('filtersContainer').style.display = 'block';
         document.getElementById('toolbar').style.display = 'flex';
         document.getElementById('exportBtn').disabled = false;
+        document.getElementById('mobileViewBtn').style.display = 'inline-block';
     };
     
     reader.readAsText(file, 'UTF-8');
@@ -142,6 +166,9 @@ function setupFilters() {
     const filtersContent = document.getElementById('filtersContent');
     filtersContent.innerHTML = '';
     
+    // 初始化筛选选择
+    filterSelections = {};
+    
     // 排除图片URL列和内部字段
     const filterableHeaders = headers.filter(h => 
         h !== imageUrlColumn && 
@@ -149,23 +176,249 @@ function setupFilters() {
     );
     
     filterableHeaders.forEach(header => {
-        const filterItem = document.createElement('div');
-        filterItem.className = 'filter-item';
-        
-        const label = document.createElement('label');
-        label.textContent = header + ':';
-        
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = '输入筛选条件...';
-        input.dataset.header = header;
-        input.addEventListener('input', debounce(applyFilters, 300));
-        
-        filterItem.appendChild(label);
-        filterItem.appendChild(input);
-        filtersContent.appendChild(filterItem);
+        createFilterDropdown(filtersContent, header, header, 'text');
     });
 }
+
+// 创建筛选下拉框
+function createFilterDropdown(container, label, fieldName, type) {
+    const filterItem = document.createElement('div');
+    filterItem.className = 'filter-item';
+    
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = label + ':';
+    
+    const button = document.createElement('button');
+    button.className = 'filter-button';
+    button.dataset.field = fieldName;
+    button.dataset.type = type;
+    
+    const buttonText = document.createElement('span');
+    buttonText.textContent = '全部';
+    buttonText.className = 'filter-button-text';
+    
+    const arrow = document.createElement('span');
+    arrow.className = 'filter-arrow';
+    arrow.textContent = '▼';
+    
+    button.appendChild(buttonText);
+    button.appendChild(arrow);
+    
+    button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFilterDropdown(button, fieldName, type);
+    });
+    
+    filterItem.appendChild(labelSpan);
+    filterItem.appendChild(button);
+    container.appendChild(filterItem);
+    
+    // 初始化筛选选择
+    filterSelections[fieldName] = new Set();
+}
+
+// 切换筛选下拉框
+function toggleFilterDropdown(button, fieldName, type) {
+    // 关闭其他下拉框
+    if (activeDropdown && activeDropdown !== button) {
+        closeActiveDropdown();
+    }
+    
+    // 如果已经打开，则关闭
+    const existingDropdown = button.parentElement.querySelector('.filter-dropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+        button.classList.remove('open');
+        activeDropdown = null;
+        return;
+    }
+    
+    // 创建下拉框
+    const dropdown = createDropdownPanel(fieldName, type);
+    button.parentElement.appendChild(dropdown);
+    button.classList.add('open');
+    activeDropdown = button;
+    
+    // 显示下拉框
+    setTimeout(() => dropdown.classList.add('show'), 10);
+}
+
+// 创建下拉面板
+function createDropdownPanel(fieldName, type) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'filter-dropdown';
+    
+    // 搜索框
+    const searchDiv = document.createElement('div');
+    searchDiv.className = 'filter-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = '搜索...';
+    searchInput.addEventListener('input', (e) => {
+        filterDropdownOptions(dropdown, e.target.value);
+    });
+    searchDiv.appendChild(searchInput);
+    dropdown.appendChild(searchDiv);
+    
+    // 选项列表
+    const optionsDiv = document.createElement('div');
+    optionsDiv.className = 'filter-options';
+    
+    // 获取统计数据
+    const stats = getFieldStatistics(fieldName);
+    
+    // 创建选项
+    stats.forEach(({ value, count }) => {
+        const option = document.createElement('div');
+        option.className = 'filter-option';
+        option.dataset.value = value;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = filterSelections[fieldName].size === 0 || filterSelections[fieldName].has(value);
+        checkbox.addEventListener('change', () => {
+            updateFilterSelection(fieldName, value, checkbox.checked);
+        });
+        
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'filter-option-label';
+        labelSpan.textContent = value;
+        labelSpan.title = value;
+        
+        const countSpan = document.createElement('span');
+        countSpan.className = 'filter-option-count';
+        countSpan.textContent = `(${count})`;
+        
+        option.appendChild(checkbox);
+        option.appendChild(labelSpan);
+        option.appendChild(countSpan);
+        
+        option.addEventListener('click', (e) => {
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            }
+        });
+        
+        optionsDiv.appendChild(option);
+    });
+    
+    dropdown.appendChild(optionsDiv);
+    
+    // 操作按钮
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'filter-actions';
+    
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.textContent = '全选';
+    selectAllBtn.addEventListener('click', () => selectAllOptions(dropdown, fieldName, true));
+    
+    const clearAllBtn = document.createElement('button');
+    clearAllBtn.textContent = '清除';
+    clearAllBtn.addEventListener('click', () => selectAllOptions(dropdown, fieldName, false));
+    
+    const applyBtn = document.createElement('button');
+    applyBtn.textContent = '确定';
+    applyBtn.style.backgroundColor = '#1890ff';
+    applyBtn.style.color = 'white';
+    applyBtn.style.border = 'none';
+    applyBtn.addEventListener('click', () => {
+        closeActiveDropdown();
+        applyFilters();
+    });
+    
+    actionsDiv.appendChild(selectAllBtn);
+    actionsDiv.appendChild(clearAllBtn);
+    actionsDiv.appendChild(applyBtn);
+    dropdown.appendChild(actionsDiv);
+    
+    return dropdown;
+}
+
+// 筛选下拉选项
+function filterDropdownOptions(dropdown, searchText) {
+    const options = dropdown.querySelectorAll('.filter-option');
+    const search = searchText.toLowerCase();
+    
+    options.forEach(option => {
+        const label = option.querySelector('.filter-option-label').textContent.toLowerCase();
+        option.style.display = label.includes(search) ? 'flex' : 'none';
+    });
+}
+
+// 更新筛选选择
+function updateFilterSelection(fieldName, value, checked) {
+    if (checked) {
+        filterSelections[fieldName].add(value);
+    } else {
+        filterSelections[fieldName].delete(value);
+    }
+    
+    updateFilterButtonText(fieldName);
+}
+
+// 全选/清除选项
+function selectAllOptions(dropdown, fieldName, selectAll) {
+    const checkboxes = dropdown.querySelectorAll('.filter-option input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        const option = checkbox.closest('.filter-option');
+        if (option.style.display !== 'none') {
+            checkbox.checked = selectAll;
+            const value = option.dataset.value;
+            if (selectAll) {
+                filterSelections[fieldName].add(value);
+            } else {
+                filterSelections[fieldName].delete(value);
+            }
+        }
+    });
+    
+    updateFilterButtonText(fieldName);
+}
+
+// 更新筛选按钮文本
+function updateFilterButtonText(fieldName) {
+    const button = document.querySelector(`.filter-button[data-field="${fieldName}"]`);
+    if (!button) return;
+    
+    const buttonText = button.querySelector('.filter-button-text');
+    const selectedCount = filterSelections[fieldName].size;
+    
+    if (selectedCount === 0) {
+        buttonText.innerHTML = '全部';
+        button.classList.remove('active');
+    } else {
+        const stats = getFieldStatistics(fieldName);
+        const totalCount = stats.length;
+        
+        if (selectedCount === totalCount) {
+            buttonText.innerHTML = '全部';
+            button.classList.remove('active');
+        } else {
+            buttonText.innerHTML = `已选 <span class="filter-badge">${selectedCount}</span>`;
+            button.classList.add('active');
+        }
+    }
+}
+
+// 关闭当前打开的下拉框
+function closeActiveDropdown() {
+    if (activeDropdown) {
+        const dropdown = activeDropdown.parentElement.querySelector('.filter-dropdown');
+        if (dropdown) {
+            dropdown.remove();
+        }
+        activeDropdown.classList.remove('open');
+        activeDropdown = null;
+    }
+}
+
+// 点击外部关闭下拉框
+document.addEventListener('click', (e) => {
+    if (activeDropdown && !e.target.closest('.filter-item')) {
+        closeActiveDropdown();
+    }
+});
 
 // 防抖函数
 function debounce(func, wait) {
@@ -182,20 +435,25 @@ function debounce(func, wait) {
 
 // 应用筛选
 function applyFilters() {
-    const filterInputs = document.querySelectorAll('#filtersContent input');
-    const filters = {};
-    
-    filterInputs.forEach(input => {
-        const value = input.value.trim();
-        if (value) {
-            filters[input.dataset.header] = value.toLowerCase();
-        }
-    });
-    
     filteredData = csvData.filter(row => {
-        return Object.keys(filters).every(header => {
-            const cellValue = String(row[header] || '').toLowerCase();
-            return cellValue.includes(filters[header]);
+        // 检查每个筛选字段
+        return Object.keys(filterSelections).every(fieldName => {
+            const selectedValues = filterSelections[fieldName];
+            
+            // 如果没有选中任何值，显示全部
+            if (selectedValues.size === 0) {
+                return true;
+            }
+            
+            // 获取该行在该字段的值
+            let rowValue = row[fieldName];
+            
+            if (!rowValue) {
+                rowValue = '(空)';
+            }
+            
+            // 检查该值是否在选中的值中
+            return selectedValues.has(rowValue);
         });
     });
     
@@ -207,10 +465,15 @@ function applyFilters() {
 
 // 清除筛选
 function clearFilters() {
-    const filterInputs = document.querySelectorAll('#filtersContent input');
-    filterInputs.forEach(input => {
-        input.value = '';
+    // 清除所有筛选选择
+    Object.keys(filterSelections).forEach(fieldName => {
+        filterSelections[fieldName].clear();
+        updateFilterButtonText(fieldName);
     });
+    
+    // 关闭打开的下拉框
+    closeActiveDropdown();
+    
     filteredData = [...csvData];
     currentPage = 1;
     selectedItems.clear();
@@ -248,6 +511,34 @@ function renderImages() {
         const imageUrl = row[imageUrlColumn] || '';
         if (imageUrl) {
             preloadImage(imageUrl);
+        }
+    });
+}
+
+// 更新图片信息显示
+function updateImageInfo(infoDiv, row) {
+    infoDiv.innerHTML = '';
+    
+    // 显示CSV中的其他字段
+    headers.forEach(header => {
+        if (header !== imageUrlColumn && !header.startsWith('_')) {
+            const value = row[header] || '';
+            if (value) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'image-info-row';
+                
+                const label = document.createElement('span');
+                label.className = 'image-info-label';
+                label.textContent = header + ':';
+                
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'image-info-value';
+                valueSpan.textContent = value;
+                
+                rowDiv.appendChild(label);
+                rowDiv.appendChild(valueSpan);
+                infoDiv.appendChild(rowDiv);
+            }
         }
     });
 }
@@ -319,28 +610,7 @@ function createImageCard(row, index, imageUrl) {
     // 信息区域
     const infoDiv = document.createElement('div');
     infoDiv.className = 'image-info';
-    
-    headers.forEach(header => {
-        if (header !== imageUrlColumn && !header.startsWith('_')) {
-            const value = row[header] || '';
-            if (value) {
-                const rowDiv = document.createElement('div');
-                rowDiv.className = 'image-info-row';
-                
-                const label = document.createElement('span');
-                label.className = 'image-info-label';
-                label.textContent = header + ':';
-                
-                const valueSpan = document.createElement('span');
-                valueSpan.className = 'image-info-value';
-                valueSpan.textContent = value;
-                
-                rowDiv.appendChild(label);
-                rowDiv.appendChild(valueSpan);
-                infoDiv.appendChild(rowDiv);
-            }
-        }
-    });
+    updateImageInfo(infoDiv, row);
     
     // 操作按钮
     const actionsDiv = document.createElement('div');
@@ -649,3 +919,22 @@ document.getElementById('rejectReasonInput').addEventListener('keydown', functio
     }
 });
 
+
+// 切换手机预览模式
+function toggleMobileView() {
+    isMobileView = !isMobileView;
+    const container = document.querySelector('.container');
+    const btn = document.getElementById('mobileViewBtn');
+    
+    if (isMobileView) {
+        container.classList.add('mobile-view');
+        btn.textContent = '💻 桌面预览';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+    } else {
+        container.classList.remove('mobile-view');
+        btn.textContent = '📱 手机预览';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+    }
+}

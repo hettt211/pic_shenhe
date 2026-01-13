@@ -1,0 +1,14 @@
+{
+  "name": "image-review-platform",
+  "version": "1.0.0",
+  "description": "批量图片审核平台 - 支持AI检测书名清晰度",
+  "scripts": {
+    "proxy": "node proxy-server.js",
+    "start": "node proxy-server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
+  }
+}

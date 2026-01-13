@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+
+# Dependencies
+node_modules/
+
+# Test files
+test-images.csv
+test-inject.js
