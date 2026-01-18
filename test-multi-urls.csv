@@ -1,0 +1,4 @@
+albumid,封面图url,扩图后url,无字底图url
+123456,http://example.com/original1.jpg,http://example.com/outpaint1.jpg,http://example.com/notext1.jpg
+234567,http://example.com/original2.jpg,http://example.com/outpaint2.jpg,http://example.com/notext2.jpg
+345678,http://example.com/original3.jpg,http://example.com/outpaint3.jpg,http://example.com/notext3.jpg
