@@ -934,9 +934,49 @@ function closeRejectModal() {
     currentRejectColumnIndex = null;
 }
 
-// 批量通过选中（已废弃，保留空函数）
+// 批量通过选中
 function approveSelected() {
-    alert('多列URL模式下，请单独审核每张图片');
+    // 统计所有已勾选的图片
+    let selectedCount = 0;
+    const selectedImages = [];
+    
+    // 遍历所有数据（不仅仅是当前页）
+    filteredData.forEach((row, rowIndex) => {
+        imageUrlColumns.forEach((column, colIndex) => {
+            const checkedKey = `_checked_${colIndex}`;
+            if (row[checkedKey]) {
+                selectedCount++;
+                selectedImages.push({ rowIndex, colIndex, row });
+            }
+        });
+    });
+    
+    if (selectedCount === 0) {
+        alert('请先勾选要批量通过的图片');
+        return;
+    }
+    
+    // 确认操作
+    const confirmed = confirm(`确定要批量通过 ${selectedCount} 张已勾选的图片吗？`);
+    if (!confirmed) {
+        return;
+    }
+    
+    // 批量通过
+    selectedImages.forEach(({ rowIndex, colIndex, row }) => {
+        const statusKey = `_reviewStatus_${colIndex}`;
+        const reasonKey = `_rejectReason_${colIndex}`;
+        
+        row[statusKey] = 'approved';
+        row[reasonKey] = '';
+        // 保持勾选状态
+    });
+    
+    // 重新渲染
+    renderImages();
+    updateToolbar();
+    
+    alert(`成功批量通过 ${selectedCount} 张图片`);
 }
 
 // 导出审核结果
@@ -1020,6 +1060,36 @@ function updateToolbar() {
     const totalPages = Math.ceil(filteredData.length / pageSize);
     const pageInfo = document.getElementById('pageInfo');
     pageInfo.textContent = `共 ${filteredData.length} 条，第 ${currentPage} / ${totalPages} 页`;
+    
+    // 统计已选中的图片数量
+    let selectedCount = 0;
+    filteredData.forEach((row) => {
+        imageUrlColumns.forEach((column, colIndex) => {
+            const checkedKey = `_checked_${colIndex}`;
+            if (row[checkedKey]) {
+                selectedCount++;
+            }
+        });
+    });
+    
+    // 更新已选中数量显示
+    const selectedCountEl = document.getElementById('selectedCount');
+    const batchApproveBtn = document.getElementById('batchApproveBtn');
+    if (selectedCountEl) {
+        if (selectedCount > 0) {
+            selectedCountEl.textContent = `已选中 ${selectedCount} 张图片`;
+            selectedCountEl.style.color = '#1890ff';
+            selectedCountEl.style.fontWeight = 'bold';
+            if (batchApproveBtn) {
+                batchApproveBtn.disabled = false;
+            }
+        } else {
+            selectedCountEl.textContent = '';
+            if (batchApproveBtn) {
+                batchApproveBtn.disabled = true;
+            }
+        }
+    }
     
     const pagination = document.getElementById('pagination');
     pagination.innerHTML = '';

@@ -48,7 +48,9 @@
                     <span class="info-text" id="pageInfo"></span>
                 </div>
                 <div class="toolbar-right">
+                    <span class="info-text" id="selectedCount" style="margin-right: 10px; color: #666;"></span>
                     <button class="btn btn-success" onclick="selectAllCurrentPage()">全选本页所有图片</button>
+                    <button class="btn btn-primary" id="batchApproveBtn" onclick="approveSelected()" style="margin-left: 10px;" disabled>批量通过已选中</button>
                     <div class="pagination" id="pagination"></div>
                 </div>
             </div>
